@@ -1,4 +1,4 @@
-# 26-10-15-157 — The manager is Claude Code fed by a read-only watcher
+# 26-10-15-157 — The manager is Claude Code woken by a watcher
 - **Status**: Proposed
 - **Date**: 2026-10-15
 
@@ -27,12 +27,19 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 
 1. **The manager is a Claude Code agent.** It is this repository: `AGENTS.md`
    is its instructions and `.agents/skills` holds its own skills. It runs as
-   a long-lived discobox cloned from `discobox-ai/agent`, and the user talks
-   to it in the Claude Code TUI through `discobox attach`. The manager
-   coordinates and delegates; it does no implementation work itself.
+   a long-lived discobox cloned from `discobox-ai/agent`, in the box's
+   `primary` terminal, which is the Claude Code TUI. The manager coordinates
+   and delegates; it does no implementation work itself.
+   - **People** use that terminal directly: `discobox attach`.
+   - **Programs** use it without attaching: `discobox admin terminal screen`
+     reads it, `input` types into it, and `wait --hook Stop --after` follows
+     its turns. Programs here means the watcher, the manager when it looks at
+     a worker, and a later GUI.
+   - **One mechanism for every box.** The same commands drive the manager and
+     every worker, on any harness.
 
-2. **A Go watcher observes; it never acts.** `discobox-agent watch` runs as a
-   discobox service in the manager's box.
+2. **A Go watcher observes, and wakes only the manager.**
+   `discobox-agent watch` runs as a discobox service in the manager's box.
    - **What it polls:**
      - GitHub, for the configured org: issues, pull requests, check runs on
        PR heads and on `main`, and the user's notifications. It respects
@@ -43,16 +50,27 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
      - what it observed;
      - the board, one row per work item;
      - an event queue.
+   - **How it wakes the manager:** when events that need a decision are
+     queued, it types a one-line notice into the manager's `primary` terminal
+     with `terminal input`. The notice names the events and nothing else.
+     - **Wait for a quiet terminal.** It types only when both hold:
+       - the manager's last hook is `Stop`, so no turn is running;
+       - the terminal's `lastAccessedAt` is no later than that `Stop`, so no
+         one has typed since and the prompt is empty.
+
+       Otherwise it holds the notice until the next `Stop`.
+     - **Batch.** Events queued while a turn runs go out together in one
+       notice.
+     - Because the watcher drops everything that needs no decision, a notice
+       always has work behind it.
    - **How the manager reads it:**
-     - `discobox-agent next` blocks until there is an event that needs a
-       decision, prints it as JSON, and acknowledges it. The manager keeps it
-       running as a background command, so its exit is what wakes the
-       session. Because the watcher filters out everything that needs no
-       decision, a wake-up always has work behind it.
+     - `discobox-agent events` prints the queued events as JSON, and
+       `discobox-agent ack` acknowledges them.
      - `board` and `inbox` print the current state.
-   - **It changes nothing outside its database.** Every action (launch,
-     message, approve, retire) is the manager's, so every action passes
-     through Claude Code's permissions and the credential judge.
+   - **The notice is its only action.** Apart from it, the watcher changes
+     nothing outside its database. Every action (launch, message, approve,
+     retire) is the manager's, so every action passes through Claude Code's
+     permissions and the credential judge.
 
 3. **Workers report through box tags, not their screen.** A worker is
    launched like this:
@@ -128,11 +146,25 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 - **Worker skills in this repository.** They are shared by every repo in the
   org and stay in `discobox-ai/skills`. This repository holds only what the
   manager runs.
+- **Running the manager inside tmux** and driving it with `send-keys` and
+  `capture-pane`.
+  - tmux adds panes, captures with colors, and `pipe-pane`, but none of
+    these is needed here.
+  - tmux knows nothing about harness hooks, so the end of a turn would be
+    guessed from the screen.
+  - It reaches only the box it runs in, and nests one multiplexer inside
+    another.
+  - Workers already run in `primary`, so the manager would be driven
+    differently from every worker.
+- **Waking the manager with a background `discobox-agent next`** whose exit
+  re-invokes Claude Code. It works only while the manager itself keeps the
+  command running. It also wakes the session in the middle of what the user
+  is typing.
 - **Waking the TUI through a Claude Code channel.** A channel is an MCP
-  server that pushes events into a live session. It is the closest fit, but
-  it is a research preview: it needs `--dangerously-load-development-channels`
-  and auth through claude.ai or a Console API key. A background `next` works
-  on any Claude Code.
+  server that pushes events into a live session. It is a research preview:
+  it needs `--dangerously-load-development-channels` and auth through
+  claude.ai or a Console API key. It also works only for Claude Code, while
+  `terminal input` works on any harness.
 - **Reading the conversation from transcript files** to rebuild state or to
   feed a GUI. The format is internal. State the GUI needs lives in the
   watcher (§6).
@@ -150,8 +182,6 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
     nothing locks a transcript against two writers.
   - It reads the board and inbox from the watcher (§6).
   - It needs no change to the watcher, `AGENTS.md`, or the skills.
-- **Channels as the wake path.** Revisit when channels leave research
-  preview.
 
 ## Consequences
 

@@ -16,7 +16,7 @@ and talk to it there:
 discobox new -C https://github.com/discobox-ai/agent@main -p "What needs me today?"
 ```
 
-The design is [ADR 26-10-15-157](docs/adr/26-10-15-157-the-manager-is-claude-code-fed-by-a-read-only-watcher.md).
+The design is [ADR 26-10-15-157](docs/adr/26-10-15-157-the-manager-is-claude-code-woken-by-a-watcher.md).
 
 ## Build
 
