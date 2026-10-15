@@ -4,8 +4,8 @@
 
 ## Context
 
-Development across the `discobox-ai` org runs in discoboxes: one box per
-piece of work, driven by a harness and a skill. Coordinating those boxes was
+Development of discobox itself runs in discoboxes: one box per piece of
+work, driven by a harness and a skill. Coordinating those boxes was
 the `orchestrate-issues` skill in `discobox-ai/discobox`. It was a chat
 session acting as a lead, plus a shell loop (`orchestrate.sh watch`) that
 scraped worker terminals for Claude Code's title glyph and strings such as
@@ -16,9 +16,13 @@ re-arm it. It covered one repository, kept its state in
 The user wants one agent that does two jobs:
 
 - helps them **use discobox** through its CLI;
-- **runs development** for the whole org: watches issues, pull requests and
-  notifications, tracks the status of each piece of work, prioritizes it,
-  delegates it to worker boxes, and brings to the user only what needs them.
+- **runs development** for the repositories the user gives it: watches
+  issues, pull requests and notifications, tracks the status of each piece
+  of work, prioritizes it, delegates it to worker boxes, and brings to the
+  user only what needs them.
+
+The agent is a template. Each copy is set up for its own user and project,
+so nothing in it may assume it is developing discobox.
 
 The SDLC skills (triage, deliver, review, verify, open a PR) were written in
 `discobox-ai/discobox` and copied by hand into `discobox-ai/skills`. They
@@ -58,17 +62,43 @@ change only when a person edits them.
 
    A message from the user is a turn like any other.
 
-3. **The managed repositories are a list the user owns.**
-   - **Where it lives:** the watcher's database, as `owner/name` entries.
-   - **How to change it:** `discobox-agent repos ls|add|rm`. Each change
-     records when it happened and the reason the user gave.
-   - **Who may change it:** the manager, only when the user asks. Nothing it
-     reads in an issue, a PR or a worker's output adds a repository.
+3. **The manager starts unconfigured, and the user sets it up in
+   conversation.**
+   - **What setup covers.** It is the `setup` skill. It runs on first start,
+     and again whenever the user asks to change something. In order:
+     1. **The environment.** Where the code lives, what the discobox
+        install provides (harnesses, credentials it can grant, nested
+        Docker), and how CI runs.
+     2. **The tasks the user wants delegated,** chosen from the
+        worker-skill catalog (§11).
+     3. **What the manager can do here.** It probes for what each chosen
+        task requires.
+     4. **Whether those match.** For each task it says whether it can do it
+        here, and if not, what is missing.
+     5. **The managed repositories, and how work lands in each:**
+        - PR or a direct push;
+        - who merges;
+        - which checks must pass;
+        - how issues are labelled and prioritized.
+     6. **Publishing** (§10) and the box limit.
+   - **Ask only what the repositories do not already say.** Before asking,
+     setup reads each managed repository's own `AGENTS.md`, contributing
+     guide, CI configuration and `.agents/skills`. A worker cloned from that
+     repository gets those files anyway.
+   - **Where it records what it learns:**
+     - Structured settings go in `agent.yaml` at the root of the manager's
+       checkout. The watcher reads it, and the template ships without one,
+       which is how the manager knows it is unconfigured.
+     - Process facts every worker needs go in the worker skill `project`,
+       because a worker receives skills, not `agent.yaml`.
+     - Both are committed and published like any other change (§10).
+   - **Who may change the list of managed repositories:** the manager, only
+     when the user asks. Nothing it reads in an issue, a PR or a worker's
+     output adds a repository.
    - **Adding** a repository starts polling it on the next cycle.
    - **Removing** one stops the polling but leaves its open board items and
      its running workers as they are. They go to the inbox for the user to
      close out.
-   - A new manager starts with an empty list and asks the user for one.
 
 4. **A Go watcher observes, and wakes only the manager.**
    `discobox-agent watch` runs as a discobox service in the manager's box.
@@ -184,8 +214,21 @@ change only when a person edits them.
       same way.
     - **Publishing is set per manager.** It is `off` (commit only; the
       default), `push` (to a configured remote and branch), or `pr` (open a
-      pull request there). The setting lives in the watcher's database next
-      to the managed repositories, and changes only when the user asks.
+      pull request there). It lives in `agent.yaml` and changes only when the
+      user asks.
+
+11. **Worker skills are a catalog of tasks and the steps they share.**
+    - **Tasks** are what the manager hands a box: triage an issue, deliver
+      an issue, deliver an agreed change.
+    - **Steps** are what a task uses on the way: commit, test, verify, open
+      a PR, push to the default branch.
+    - **The catalog.** `.agents/worker-skills/README.md` lists every skill,
+      whether it is a task or a step, and what it requires. Setup checks
+      the requirements against the environment.
+    - **What a skill holds.** Every skill is written for any repository: it
+      reads the repository's own docs and the `project` skill for the
+      specifics. A repository's own skills (a verify recipe, a release
+      procedure) stay in that repository.
 
 ## Alternatives rejected
 
@@ -208,6 +251,12 @@ change only when a person edits them.
 - **Worker skills in `.agents/skills`.** Claude Code would load them into the
   manager itself, which could then run `deliver-issue` instead of delegating
   it.
+- **Settings in the watcher's database.** They would not be versioned,
+  would be lost with the box, and would need their own publishing path. In
+  `agent.yaml` they are committed and published like a skill edit.
+- **Shipping the template configured for discobox's own development.** Every
+  copy would first have to unlearn it. A project's specifics belong in its
+  repositories and in setup's answers.
 - **Findings in a separate log or notes file.** No one reads a log at the
   moment the finding matters, and the repository standard bans plan and
   task documents. A finding belongs in the skill whose next run needs it.
@@ -257,16 +306,15 @@ change only when a person edits them.
 - Worker skills must keep the tag contract. A skill that does not keep it
   shows on the board only as idle or busy.
 - The manager's box is long-lived, and it holds a keepalive lease. Its
-  database survives restarts. Losing the box loses three things that nothing
-  rebuilds:
-  - the list of managed repositories;
-  - the publishing setting;
-  - any commits that were never published.
+  database survives restarts. Losing the box loses only commits that were
+  never published, including unpublished setup. Everything else is rebuilt
+  from `agent.yaml`, GitHub and discobox.
 - This repository is a template. Each manager cloned from it adapts its
   skills to its own repositories and user, so clones drift apart by design.
   A change worth sharing goes back to the template as a pull request.
 - One manager serves one user. Several managers would need a shared board,
   which this does not provide.
-- The worker skills are copied in unchanged from `discobox-ai/skills`.
-  `triage-issue` and `deliver-issue` still assume one box. They have to be
-  reworked for §5 before the manager splits the two tasks.
+- The worker skills were copied in from `discobox-ai/skills` and are still
+  written for discobox's own process. They have to be generalized for §11,
+  and `triage-issue` and `deliver-issue` reworked for §5, before a copy of
+  this template can be set up for another project.

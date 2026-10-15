@@ -17,6 +17,7 @@ flowchart LR
 ```
 
 - `.agents/worker-skills`: the skills each worker box is launched with (`discobox new --skills`).
+- `.agents/skills/setup`: the onboarding conversation that writes `agent.yaml`.
 - `.agents/skills/discobox-cli`: helping the user use discobox: which
   commands run from the box and which only on their machine.
 - `cmd/discobox-agent`: the agent's companion binary. It holds only its
