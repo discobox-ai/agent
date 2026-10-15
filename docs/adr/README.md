@@ -15,5 +15,5 @@ Follow `template.md` and the `repostd` skill.
 <!-- repostd:adr-index -->
 | ADR | Title | Status |
 |---|---|---|
-| [26-10-15-157](26-10-15-157-the-manager-is-claude-code-woken-by-a-watcher.md) | The manager is Claude Code woken by a watcher | Proposed |
+| [26-10-15-157](26-10-15-157-the-manager-is-a-claude-code-agent-seeded-by-a-binary.md) | The manager is a Claude Code agent seeded by a binary | Proposed |
 <!-- /repostd:adr-index -->

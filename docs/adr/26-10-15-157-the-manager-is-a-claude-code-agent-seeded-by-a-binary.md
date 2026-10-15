@@ -1,4 +1,4 @@
-# 26-10-15-157 — The manager is Claude Code woken by a watcher
+# 26-10-15-157 — The manager is a Claude Code agent seeded by a binary
 - **Status**: Proposed
 - **Date**: 2026-10-15
 
@@ -30,12 +30,25 @@ change only when a person edits them.
 
 ## Decision
 
-1. **The manager is a Claude Code agent.** It is this repository: `AGENTS.md`
-   is its instructions, `.agents/skills` holds its own skills, and
-   `.agents/worker-skills` holds the skills it gives its workers. It runs as
-   a long-lived discobox cloned from `discobox-ai/agent`, in the box's
-   `primary` terminal, which is the Claude Code TUI. The manager coordinates
-   and delegates; it does no implementation work itself.
+1. **The manager is a Claude Code agent seeded by a Go binary.**
+   `discobox-agent` embeds the templates the agent starts from and runs
+   everything that is not the agent: `init`, `upgrade` (§12), and the
+   watcher (§4).
+   - **The instance.** `discobox-agent init <dir>` writes the templates into
+     a new git repository:
+     - `AGENTS.md`, its instructions;
+     - `.agents/skills`, its own skills;
+     - `.agents/worker-skills`, the skills it gives its workers.
+
+     From then on the files are the instance's, and the agent edits them
+     (§10).
+   - **Where it runs.** In a long-lived discobox, in the box's `primary`
+     terminal, which is the Claude Code TUI.
+   - **What it does.** It coordinates and delegates; it does no
+     implementation work itself.
+   - **This repository** builds the binary. Its own `AGENTS.md` is for
+     developing the binary. The agent's `AGENTS.md` is one of the embedded
+     templates.
    - **People** use that terminal directly: `discobox attach`.
    - **Programs** use it without attaching: `discobox admin terminal screen`
      reads it, `input` types into it, and `wait --hook Stop --after` follows
@@ -230,6 +243,35 @@ change only when a person edits them.
       specifics. A repository's own skills (a verify recipe, a release
       procedure) stay in that repository.
 
+12. **A new version of the manager is a new binary, and the agent applies
+    it.**
+    - **What `init` records.** It writes `.discobox-agent/manifest.json`:
+      the binary version that seeded the instance, and a copy of each
+      template as it was written. That copy is the base of the next merge.
+    - **What `discobox-agent upgrade` reports.** Once a newer binary is
+      installed, it reports each template path as JSON, comparing the base,
+      the new template, and the current file. A path is one of:
+      - unchanged;
+      - changed upstream only;
+      - changed locally only;
+      - changed on both sides;
+      - added;
+      - removed upstream.
+
+      It also prints the release notes of every version between the base and
+      the binary. It writes nothing.
+    - **What the agent then does:**
+      - applies the paths changed upstream only, with
+        `discobox-agent upgrade apply <path>`;
+      - merges the paths changed on both sides by hand, keeping what it
+        learned;
+      - tells the user what is new, and offers `setup` where a new task or
+        setting appears;
+      - records the new base with `discobox-agent upgrade finish`;
+      - commits.
+    - **How the binary reaches the box.** It is installed from the release.
+      The version in use is the one in the manifest.
+
 ## Alternatives rejected
 
 - **Keep `orchestrate-issues` and its shell loop.**
@@ -289,6 +331,18 @@ change only when a person edits them.
 - **Box meta in a side database.** Tags already ride every box's status
   report, so the watcher reads them without touching the worker.
 
+- **An instance as a clone or fork of this repository, upgraded with git
+  merges.**
+  - Upstream history, Go code and CI would land in every instance.
+  - Each upgrade would be a merge of everything, not just the templates.
+  - Conflicts would surface as git markers, with no record of why upstream
+    changed.
+  - The user would have to drive git.
+- **Managed files that `upgrade` overwrites,** as repostd's `sync` does. That
+  would erase what the agent learned.
+- **Embedding every past version's templates in the binary.** The binary
+  would grow with each release, and the instance already keeps its own base.
+
 ## Deferred
 
 - **GitHub webhooks instead of polling.** A box has no public inbound
@@ -309,9 +363,13 @@ change only when a person edits them.
   database survives restarts. Losing the box loses only commits that were
   never published, including unpublished setup. Everything else is rebuilt
   from `agent.yaml`, GitHub and discobox.
-- This repository is a template. Each manager cloned from it adapts its
-  skills to its own repositories and user, so clones drift apart by design.
-  A change worth sharing goes back to the template as a pull request.
+- Each instance adapts its skills to its own repositories and user, so
+  instances drift apart from the templates by design. A change worth sharing
+  goes back to this repository's templates as a pull request, and reaches
+  other instances in the next release.
+- **Release notes are part of the change.** An upgrade asks the agent to
+  merge intent into files it has rewritten, so every template change ships
+  with a note saying why it was made, not only what changed.
 - One manager serves one user. Several managers would need a shared board,
   which this does not provide.
 - The worker skills were copied in from `discobox-ai/skills` and are still

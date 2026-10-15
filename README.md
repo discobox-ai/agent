@@ -18,7 +18,7 @@ lands), and it records the answers in `agent.yaml`.
 discobox new -C https://github.com/discobox-ai/agent@main -p "Set yourself up for my project."
 ```
 
-The design is [ADR 26-10-15-157](docs/adr/26-10-15-157-the-manager-is-claude-code-woken-by-a-watcher.md).
+The design is [ADR 26-10-15-157](docs/adr/26-10-15-157-the-manager-is-a-claude-code-agent-seeded-by-a-binary.md).
 
 ## Build
 
