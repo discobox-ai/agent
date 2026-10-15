@@ -302,6 +302,11 @@ change only when a person edits them.
         `min` and `maxTested`;
       - the discobox Go module version its API client was built from.
 
+      Either bound may be left open. An open record (no `min`, no
+      `maxTested`) means every version is supported. Development builds
+      ship an open record, and so do releases until the record is set
+      (Deferred).
+
       The record states what was checked. The `discobox-cli` skill, the
       worker skills' CLI calls and the watcher's API calls were written
       against discobox inside that range.
@@ -401,6 +406,11 @@ change only when a person edits them.
 - **GitHub webhooks instead of polling.** A box has no public inbound
   endpoint. Revisit when discobox routes inbound webhooks to a box, or when
   polling hits rate limits at org scale.
+- **How the compatibility record is set (§13).** For now every build ships
+  an open record. Revisit before the first release that has to refuse an old
+  discobox or warn about a new one. The likely answer is a CI job that runs
+  the watcher and the skills' CLI calls against the newest discobox release
+  and records that version as `maxTested`.
 - **A custom GUI.** Revisit when the TUI stops being enough.
   - The GUI hosts the conversation on the Claude Agent SDK. It resumes the
     TUI's session by ID, one at a time and never at the same moment, because
