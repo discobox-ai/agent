@@ -28,8 +28,7 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 1. **The manager is a Claude Code agent.** It is this repository: `AGENTS.md`
    is its instructions and `.agents/skills` holds its own skills. It runs as
    a long-lived discobox cloned from `discobox-ai/agent`, and the user talks
-   to it with `discobox attach`. Claude Code is the harness. The Claude Agent
-   SDK may host the same `AGENTS.md` and skills later. The manager
+   to it in the Claude Code TUI through `discobox attach`. The manager
    coordinates and delegates; it does no implementation work itself.
 
 2. **A Go watcher observes; it never acts.** `discobox-agent watch` runs as a
@@ -46,7 +45,10 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
      - an event queue.
    - **How the manager reads it:**
      - `discobox-agent next` blocks until there is an event that needs a
-       decision, prints it as JSON, and acknowledges it.
+       decision, prints it as JSON, and acknowledges it. The manager keeps it
+       running as a background command, so its exit is what wakes the
+       session. Because the watcher filters out everything that needs no
+       decision, a wake-up always has work behind it.
      - `board` and `inbox` print the current state.
    - **It changes nothing outside its database.** Every action (launch,
      message, approve, retire) is the manager's, so every action passes
@@ -90,7 +92,18 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 
    Merges stay the user's.
 
-6. **Credentials are held by the manager's box.**
+6. **The conversation is one client of the watcher's state.**
+   - **What lives in the watcher's database:** the board, the inbox, the
+     decisions the user records, and what the manager did about each item.
+   - **How every client reads it:** through `discobox-agent` commands that
+     print JSON. The TUI session, the dashboard, and any later GUI all read
+     it the same way.
+   - **What lives only in the transcript:** reasoning, never state.
+   - **No transcript parsing.** Nothing reads Claude Code transcripts,
+     because their format is internal and changes between releases. To read
+     a turn's final text, use a `Stop` hook's `last_assistant_message`.
+
+7. **Credentials are held by the manager's box.**
    - `ai.discobox.sandbox` (create, supervise, answer requests).
    - A read-only `com.github.api` use for the watcher. It takes a fresh value
      per poll cycle through the `agentcreds` client's `get`, naming its poll
@@ -115,6 +128,14 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 - **Worker skills in this repository.** They are shared by every repo in the
   org and stay in `discobox-ai/skills`. This repository holds only what the
   manager runs.
+- **Waking the TUI through a Claude Code channel.** A channel is an MCP
+  server that pushes events into a live session. It is the closest fit, but
+  it is a research preview: it needs `--dangerously-load-development-channels`
+  and auth through claude.ai or a Console API key. A background `next` works
+  on any Claude Code.
+- **Reading the conversation from transcript files** to rebuild state or to
+  feed a GUI. The format is internal. State the GUI needs lives in the
+  watcher (§6).
 - **Box meta in a side database.** Tags already ride every box's status
   report, so the watcher reads them without touching the worker.
 
@@ -123,8 +144,14 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 - **GitHub webhooks instead of polling.** A box has no public inbound
   endpoint. Revisit when discobox routes inbound webhooks to a box, or when
   polling hits rate limits at org scale.
-- **Hosting the manager on the Claude Agent SDK.** Revisit if it needs to run
-  without a person's Claude Code session, for example on a schedule.
+- **A custom GUI.** Revisit when the TUI stops being enough.
+  - The GUI hosts the conversation on the Claude Agent SDK. It resumes the
+    TUI's session by ID, one at a time and never at the same moment, because
+    nothing locks a transcript against two writers.
+  - It reads the board and inbox from the watcher (§6).
+  - It needs no change to the watcher, `AGENTS.md`, or the skills.
+- **Channels as the wake path.** Revisit when channels leave research
+  preview.
 
 ## Consequences
 
