@@ -131,7 +131,8 @@ change only when a person edits them.
      - Releases of discobox, from `discobox-ai/discobox`. A release newer
        than the server or client version `discobox --version` reports is an
        event, raised once per release with its notes, on the same channel
-       rule. The manager then:
+       rule. The event says whether the release is inside the range this
+       binary supports (§13). The manager then:
        - tells the user what in the release matters for how they use
          discobox;
        - updates its `discobox-cli` skill to match;
@@ -293,6 +294,36 @@ change only when a person edits them.
       5. It runs `upgrade` as above.
 
       The version in use is the one in the manifest.
+
+13. **Each release of `discobox-agent` declares the discobox versions it
+    supports.**
+    - **What it declares.** The binary embeds a compatibility record:
+      - the range of discobox versions its templates and watcher support,
+        `min` and `maxTested`;
+      - the discobox Go module version its API client was built from.
+
+      The record states what was checked. The `discobox-cli` skill, the
+      worker skills' CLI calls and the watcher's API calls were written
+      against discobox inside that range.
+    - **Where else it is published.** Each release also publishes the record
+      as an asset. That lets the watcher see which newer `discobox-agent`
+      supports a discobox version before anything is installed.
+      `docs/compatibility.md` is the table of every release's record,
+      generated at release time.
+    - **`discobox-agent compat`** checks the client and server versions that
+      `discobox --version` reports against the record. It prints one of:
+      - `supported`;
+      - `newer than tested`, with the `maxTested` version;
+      - `older than supported`, with the `min` version.
+    - **When it runs.** The watcher runs the same check at start and on each
+      discobox release event. Any result other than `supported` is an event.
+    - **What the manager does with it:**
+      - **Newer than tested:** it looks for a `discobox-agent` release whose
+        record covers that version, and offers that upgrade (§12). Until
+        then it treats the `discobox-cli` skill as possibly stale: it checks
+        `--help` before every command it gives, and records what it finds.
+      - **Older than supported:** it tells the user which discobox to
+        upgrade to, and which skills or watcher features need it.
 
 ## Alternatives rejected
 

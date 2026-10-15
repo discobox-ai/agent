@@ -21,6 +21,18 @@ this box. Before relying on a behavior, read the design doc for it in
 `server/internal/resources/*/DESIGN.md`. When the user's version may differ,
 ask for theirs (`discobox --version`).
 
+Run `discobox-agent compat` first. It says whether this skill was written
+for the discobox the user runs:
+- **`supported`:** the skill holds. Still check `--help` before you state a
+  flag.
+- **`newer than tested`:** the skill may be stale.
+  - Check `--help` before every command you give.
+  - Tell the user when what you find differs from this skill.
+  - Record the difference here.
+  - A newer `discobox-agent` may already support their version (§2).
+- **`older than supported`:** some of what this skill describes may not
+  exist yet. Tell the user which discobox version adds it.
+
 ## 2. When discobox has a new release
 
 When the watcher reports a new discobox release, or the user mentions one:
