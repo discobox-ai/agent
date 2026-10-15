@@ -128,6 +128,16 @@ change only when a person edits them.
        raised once per release, carrying the version and its notes. Only
        stable releases count, unless `agent.yaml` sets
        `upgrade.channel: prerelease`.
+     - Releases of discobox, from `discobox-ai/discobox`. A release newer
+       than the server or client version `discobox --version` reports is an
+       event, raised once per release with its notes, on the same channel
+       rule. The manager then:
+       - tells the user what in the release matters for how they use
+         discobox;
+       - updates its `discobox-cli` skill to match;
+       - says how to upgrade.
+
+       Upgrading discobox is the user's to do, on their own machine.
    - **What it stores:** in SQLite (`github.com/discobox-ai/x/gormdb`):
      - what it observed;
      - the board, one row per work item;

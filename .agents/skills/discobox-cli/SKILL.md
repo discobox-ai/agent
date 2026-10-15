@@ -21,7 +21,21 @@ this box. Before relying on a behavior, read the design doc for it in
 `server/internal/resources/*/DESIGN.md`. When the user's version may differ,
 ask for theirs (`discobox --version`).
 
-## 2. Where a command can run
+## 2. When discobox has a new release
+
+When the watcher reports a new discobox release, or the user mentions one:
+
+1. Read its notes.
+2. Compare the release with the versions `discobox --version` reports.
+3. Tell the user, in a few lines, what in the release changes how they use
+   discobox. Name the commands that are new or that changed. Leave out
+   internal changes.
+4. Edit this skill so it matches the new release: commands, flags, and
+   which commands run where. Commit the edit (`AGENTS.md`, on learning).
+5. Give them the command that upgrades their own install. Upgrading is
+   theirs to do; this box cannot reach their machine.
+
+## 3. Where a command can run
 
 | Runs from this box (sandbox role) | Only on the user's machine |
 |---|---|
@@ -37,7 +51,7 @@ When a command is the user's to run:
 
 Never claim to have run it.
 
-## 3. Common tasks
+## 4. Common tasks
 
 - **Launch work:**
   - `discobox new -d -C <dir|git-url>[@ref] -p "<prompt>"`.
@@ -66,7 +80,7 @@ Never claim to have run it.
   so shows whether the server answers at all. Then `--debug`, which prints
   every API request.
 
-## 4. Diagnosing a failure the user reports
+## 5. Diagnosing a failure the user reports
 
 1. Get the exact command, the full output, and `discobox --version`.
 2. Reproduce it from here if the sandbox role allows. Otherwise read the code
