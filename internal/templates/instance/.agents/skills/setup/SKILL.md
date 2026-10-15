@@ -10,7 +10,8 @@ repository says what you manage or how its work is done. Setup is how you
 learn it, from the user and from the repositories themselves. You then
 record it where you and your workers will read it.
 
-ADR 26-10-15-157 §3 is the design.
+[ADR 26-10-15-157](https://github.com/discobox-ai/agent/blob/main/docs/adr/26-10-15-157-the-manager-is-a-claude-code-agent-seeded-by-a-binary.md)
+§3 is the design.
 
 ## 0. Where you stand
 
