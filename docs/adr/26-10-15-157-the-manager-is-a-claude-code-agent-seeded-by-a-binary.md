@@ -1,5 +1,5 @@
 # 26-10-15-157 — The manager is a Claude Code agent seeded by a binary
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-10-15
 
 ## Context
