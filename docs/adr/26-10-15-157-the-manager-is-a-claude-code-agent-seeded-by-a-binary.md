@@ -123,6 +123,11 @@ change only when a person edits them.
        `manager=<manager box ID>` that the manager sets right after
        `discobox new`. It reads their tags, their `Stop` harness hooks, and
        their pending secret requests.
+     - Releases of `discobox-agent` itself, from the repository the binary
+       was built from. A release newer than the running binary is an event,
+       raised once per release, carrying the version and its notes. Only
+       stable releases count, unless `agent.yaml` sets
+       `upgrade.channel: prerelease`.
    - **What it stores:** in SQLite (`github.com/discobox-ai/x/gormdb`):
      - what it observed;
      - the board, one row per work item;
@@ -269,7 +274,14 @@ change only when a person edits them.
         setting appears;
       - records the new base with `discobox-agent upgrade finish`;
       - commits.
-    - **How the binary reaches the box.** It is installed from the release.
+    - **How an upgrade starts.** The watcher raises a new-version event
+      (§4), or the user asks.
+      1. The manager tells the user what the release brings, from its notes.
+      2. It upgrades only once the user agrees.
+      3. It installs the release's binary.
+      4. It restarts the watcher service so the new binary is running.
+      5. It runs `upgrade` as above.
+
       The version in use is the one in the manifest.
 
 ## Alternatives rejected
