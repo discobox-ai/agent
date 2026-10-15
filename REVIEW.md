@@ -3,4 +3,5 @@
 - Nothing under `internal/templates/instance` may depend on being a
   symlink, and `Init` must skip a template at a symlink's path. Windows
   checkouts (the CI `windows` job) turn symlinks into regular files, which
-  embed then ships as templates.
+  embed then ships as templates: the review of PR #1 caught the template
+  `CLAUDE.md` breaking `init` there.
