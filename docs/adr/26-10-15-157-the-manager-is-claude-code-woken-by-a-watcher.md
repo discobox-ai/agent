@@ -20,13 +20,15 @@ The user wants one agent that does two jobs:
   notifications, tracks the status of each piece of work, prioritizes it,
   delegates it to worker boxes, and brings to the user only what needs them.
 
-The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
-`discobox-ai/skills`. Every box, for any repo in the org, pulls them in.
+The SDLC skills (triage, deliver, review, verify, open a PR) were written in
+`discobox-ai/discobox` and copied by hand into `discobox-ai/skills`. They
+change only when a person edits them.
 
 ## Decision
 
 1. **The manager is a Claude Code agent.** It is this repository: `AGENTS.md`
-   is its instructions and `.agents/skills` holds its own skills. It runs as
+   is its instructions, `.agents/skills` holds its own skills, and
+   `.agents/worker-skills` holds the skills it gives its workers. It runs as
    a long-lived discobox cloned from `discobox-ai/agent`, in the box's
    `primary` terminal, which is the Claude Code TUI. The manager coordinates
    and delegates; it does no implementation work itself.
@@ -38,14 +40,46 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
    - **One mechanism for every box.** The same commands drive the manager and
      every worker, on any harness.
 
-2. **A Go watcher observes, and wakes only the manager.**
+2. **The manager runs one loop.** A turn starts either from the watcher's
+   notice (§4) or from the user speaking. Each turn:
+   1. reads the queued events (`discobox-agent events`);
+   2. updates the board;
+   3. decides each event, with a reason: delegate it, act on it, bring it to
+      the user, or set it aside;
+   4. acts;
+   5. acknowledges the events (`discobox-agent ack`) and ends on the user's
+      moves.
+
+   Events come from:
+   - the boxes the manager created;
+   - the issues, pull requests, checks and notifications of the managed
+     repositories (§3);
+   - decisions the user records on the dashboard.
+
+   A message from the user is a turn like any other.
+
+3. **The managed repositories are a list the user owns.**
+   - **Where it lives:** the watcher's database, as `owner/name` entries.
+   - **How to change it:** `discobox-agent repos ls|add|rm`. Each change
+     records when it happened and the reason the user gave.
+   - **Who may change it:** the manager, only when the user asks. Nothing it
+     reads in an issue, a PR or a worker's output adds a repository.
+   - **Adding** a repository starts polling it on the next cycle.
+   - **Removing** one stops the polling but leaves its open board items and
+     its running workers as they are. They go to the inbox for the user to
+     close out.
+   - A new manager starts with an empty list and asks the user for one.
+
+4. **A Go watcher observes, and wakes only the manager.**
    `discobox-agent watch` runs as a discobox service in the manager's box.
    - **What it polls:**
-     - GitHub, for the configured org: issues, pull requests, check runs on
-       PR heads and on `main`, and the user's notifications. It respects
-       `X-Poll-Interval` and uses conditional requests.
-     - Discobox: the boxes it launched, their tags, their `Stop` harness
-       hooks, and pending secret requests.
+     - GitHub, for each managed repository: issues, pull requests, check runs
+       on PR heads and on the default branch, and the user's notifications
+       about it. It respects `X-Poll-Interval` and uses conditional requests.
+     - Discobox: the boxes the manager created, which it finds by the tag
+       `manager=<manager box ID>` that the manager sets right after
+       `discobox new`. It reads their tags, their `Stop` harness hooks, and
+       their pending secret requests.
    - **What it stores:** in SQLite (`github.com/discobox-ai/x/gormdb`):
      - what it observed;
      - the board, one row per work item;
@@ -72,13 +106,20 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
      retire) is the manager's, so every action passes through Claude Code's
      permissions and the credential judge.
 
-3. **Workers report through box tags, not their screen.** A worker is
-   launched like this:
+5. **One box does one task, and reports through its tags, not its
+   screen.**
+   - **Launching.** A worker is launched from the manager's checkout, so it
+     gets the worker skills as they are now, including edits not yet pushed
+     (§10):
 
-   ```
-   discobox new -d -C https://github.com/discobox-ai/<repo>@main \
-     --skills https://github.com/discobox-ai/skills -p "/<skill> <args>"
-   ```
+     ```
+     discobox new -d -C https://github.com/<owner>/<repo>@main \
+       --skills .agents/worker-skills -p "/<skill> <args>"
+     ```
+
+   - **Triage and delivery are separate tasks in separate boxes.** Triage
+     hands off through the issue: its verdict, and the failing test it posts
+     there.
 
    It keeps these tags in `~/.discobox/meta.json`:
 
@@ -91,10 +132,10 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
    | `needs` | one line: what it is waiting for |
 
    The watcher reads these through the discobox API, and the `Stop` hook
-   tells it when a box goes idle. The rewritten skills in
-   `discobox-ai/skills` implement this contract.
+   tells it when a box goes idle. The worker skills in
+   `.agents/worker-skills` implement this contract.
 
-4. **The board is ranked by fixed rules, which the manager may override with
+6. **The board is ranked by fixed rules, which the manager may override with
    a stated reason.** Highest first:
    - red CI on a default branch, or a security report;
    - a worker waiting on a human;
@@ -102,7 +143,7 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
    - priority labels;
    - age.
 
-5. **Results go up in two places.**
+7. **Results go up in two places.**
    - **The manager's terminal:** a ranked status table and the inbox (the
      items whose next move is the user's).
    - **An Artifact dashboard,** whose shared database holds the board and
@@ -110,7 +151,7 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
 
    Merges stay the user's.
 
-6. **The conversation is one client of the watcher's state.**
+8. **The conversation is one client of the watcher's state.**
    - **What lives in the watcher's database:** the board, the inbox, the
      decisions the user records, and what the manager did about each item.
    - **How every client reads it:** through `discobox-agent` commands that
@@ -121,13 +162,30 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
      because their format is internal and changes between releases. To read
      a turn's final text, use a `Stop` hook's `last_assistant_message`.
 
-7. **Credentials are held by the manager's box.**
+9. **Credentials are held by the manager's box.**
    - `ai.discobox.sandbox` (create, supervise, answer requests).
    - A read-only `com.github.api` use for the watcher. It takes a fresh value
      per poll cycle through the `agentcreds` client's `get`, naming its poll
      as the command.
    - A `delegate` grant that holds every use a worker may ask for. Within that
      delegation the manager approves a worker's request.
+
+10. **The manager owns its skills and learns by editing them.**
+    - **Where a finding goes.** When a piece of work teaches something (a
+      skill step that failed, a check that was missing, a decision the user
+      made that will come up again), the manager records it where the next
+      reader will meet it:
+      - in a worker skill, for what workers should do;
+      - in its own skills or `AGENTS.md`, for what it should do.
+
+      It commits the change in its checkout, and the commit message names
+      the work item that taught it.
+    - **When the user asks** for a skill to change, the manager edits it the
+      same way.
+    - **Publishing is set per manager.** It is `off` (commit only; the
+      default), `push` (to a configured remote and branch), or `pr` (open a
+      pull request there). The setting lives in the watcher's database next
+      to the managed repositories, and changes only when the user asks.
 
 ## Alternatives rejected
 
@@ -143,9 +201,20 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
   retiring merged boxes, as `orchestrate.sh` did. Keeping it read-only leaves
   one actor whose every action is visible and judged. The cost is one LLM
   turn per action.
-- **Worker skills in this repository.** They are shared by every repo in the
-  org and stay in `discobox-ai/skills`. This repository holds only what the
-  manager runs.
+- **Worker skills in `discobox-ai/skills`, linked with `--skills URL`.**
+  - A worker would see an edit only after it was pushed.
+  - The manager could not adapt a skill without publishing it first.
+  - Every manager cloned from this repository would share one set of skills.
+- **Worker skills in `.agents/skills`.** Claude Code would load them into the
+  manager itself, which could then run `deliver-issue` instead of delegating
+  it.
+- **Findings in a separate log or notes file.** No one reads a log at the
+  moment the finding matters, and the repository standard bans plan and
+  task documents. A finding belongs in the skill whose next run needs it.
+- **Triage and delivery in one box**, as `orchestrate-issues` did. A box that
+  does one task is simple to read from its tags and safe to retire. The
+  handoff the old way kept inside the box (an uncommitted failing test)
+  moves to the issue, where people can see it too.
 - **Running the manager inside tmux** and driving it with `send-keys` and
   `capture-pane`.
   - tmux adds panes, captures with colors, and `pipe-pane`, but none of
@@ -167,7 +236,7 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
   `terminal input` works on any harness.
 - **Reading the conversation from transcript files** to rebuild state or to
   feed a GUI. The format is internal. State the GUI needs lives in the
-  watcher (§6).
+  watcher (§8).
 - **Box meta in a side database.** Tags already ride every box's status
   report, so the watcher reads them without touching the worker.
 
@@ -180,15 +249,24 @@ The shared SDLC skills (triage, deliver, review, verify, open a PR) live in
   - The GUI hosts the conversation on the Claude Agent SDK. It resumes the
     TUI's session by ID, one at a time and never at the same moment, because
     nothing locks a transcript against two writers.
-  - It reads the board and inbox from the watcher (§6).
+  - It reads the board and inbox from the watcher (§8).
   - It needs no change to the watcher, `AGENTS.md`, or the skills.
 
 ## Consequences
 
 - Worker skills must keep the tag contract. A skill that does not keep it
   shows on the board only as idle or busy.
-- The manager's box is long-lived. It holds a keepalive lease and its
-  database survives restarts, so losing the box loses only state the watcher
-  can rebuild from GitHub and discobox.
-- One manager serves one user and one org. Several managers would need a
-  shared board, which this does not provide.
+- The manager's box is long-lived, and it holds a keepalive lease. Its
+  database survives restarts. Losing the box loses three things that nothing
+  rebuilds:
+  - the list of managed repositories;
+  - the publishing setting;
+  - any commits that were never published.
+- This repository is a template. Each manager cloned from it adapts its
+  skills to its own repositories and user, so clones drift apart by design.
+  A change worth sharing goes back to the template as a pull request.
+- One manager serves one user. Several managers would need a shared board,
+  which this does not provide.
+- The worker skills are copied in unchanged from `discobox-ai/skills`.
+  `triage-issue` and `deliver-issue` still assume one box. They have to be
+  reworked for §5 before the manager splits the two tasks.

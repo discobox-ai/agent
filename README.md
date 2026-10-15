@@ -1,15 +1,15 @@
 # agent
 
-The `discobox-ai` manager: a Claude Code agent that helps you use
+A development manager: a Claude Code agent that helps you use
 [discobox](https://github.com/discobox-ai/discobox) and runs development
-across the `discobox-ai` org. It watches issues, pull requests and
+across the repositories you give it. It watches issues, pull requests and
 notifications, tracks every piece of work, prioritizes it, delegates it to
-worker discoboxes running the shared
-[skills](https://github.com/discobox-ai/skills), and brings you only the
-decisions that are yours.
+worker discoboxes running the skills it keeps in `.agents/worker-skills`, and
+brings you only the decisions that are yours. It records what the work
+teaches it by editing those skills.
 
 It is not a program you call. This repository *is* the agent: `AGENTS.md`
-is its instructions and `.agents/skills` its skills. Run it in a discobox
+is its instructions and `.agents/skills` its own skills. Run it in a discobox
 and talk to it there:
 
 ```sh
